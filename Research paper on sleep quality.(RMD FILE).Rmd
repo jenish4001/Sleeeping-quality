@@ -1,0 +1,203 @@
+---
+title: "Group8 - RMarkdown File"
+author: "Li Zhi Liao, Xi Wang, Zhonghan Deng, Jenish Dhaduk"
+date: "12/10/2019"
+output: 
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
+    number_sections: TRUE
+---
+
+```{r}
+library(dplyr)
+library(MASS)
+library(knitr)
+library(ggplot2)
+library(kableExtra)
+library(ggplot2)
+library(brant)
+```
+
+# Read and clean the Dataset
+```{r}
+
+data <- read.csv("SleepQuality_Final.csv", na.strings = "")
+
+# omitting the rows with missing values
+data <- data %>% 
+  na_if("") %>% # recode "" to NA
+  na.omit # remove NAs
+
+# renaming the columns
+names(data)[2] <- "wake_up"
+names(data)[3] <- "coffee"
+names(data)[4] <- "exercise"
+names(data)[5] <- "stress"
+names(data)[6] <- "age"
+names(data)[7] <- "dependents"
+names(data)[8] <- "noise"
+names(data)[9] <- "eat_habits"
+names(data)[10] <- "medicine"
+names(data)[11] <- "sexual_activity"
+names(data)[12] <- "hours"
+names(data)[13] <- "quality"
+names(data)[14] <- "dream"
+names(data)[15] <- "time_to_fall_asleep"
+names(data)[16] <- "feeling"
+
+data <- data[-c(1)] # dropping the timestamp column
+
+data <- data %>% 
+  mutate( quality=recode(quality, `excellent (no complaints at all!)`= "Excellent",
+                        `fair (can be improved)`="Fair",
+                        `good (doing well)`="Good", 
+                        `okay (just fine with it)`="Okay",
+                        `poor (terrible)`="Poor")) 
+         
+final <- data
+```
+
+
+# Use the Chi-Squared test to determine if there is a significant relationship between DV and each IV
+```{r}
+set.seed(2)
+# Run the Chi-squared test using chisq.test
+chisq.test(final$quality, final$wake_up, simulate.p.value=TRUE)
+chisq.test(final$quality, final$coffee, simulate.p.value=TRUE)
+chisq.test(final$quality, final$exercise, simulate.p.value=TRUE)
+chisq.test(final$quality, final$age, simulate.p.value=TRUE)
+chisq.test(final$quality, final$dependents, simulate.p.value=TRUE)
+chisq.test(final$quality, final$noise, simulate.p.value=TRUE)
+chisq.test(final$quality, final$eat_habits, simulate.p.value=TRUE)
+chisq.test(final$quality, final$medicine, simulate.p.value=TRUE)
+chisq.test(final$quality, final$sexual_activity, simulate.p.value=TRUE)
+chisq.test(final$quality, final$hours, simulate.p.value=TRUE)
+chisq.test(final$quality, final$dream, simulate.p.value=TRUE)
+chisq.test(final$quality, final$time_to_fall_asleep, simulate.p.value=TRUE)
+chisq.test(final$quality, final$feeling, simulate.p.value=TRUE)
+
+final$stress <- as.factor(final$stress)  # change it to factor so we can run the chisq.test
+chisq.test(final$quality, final$stress, simulate.p.value=TRUE)
+
+```
+
+
+# Model Prediction
+```{r}
+results <- data.frame(ticker=character(), value=numeric(), date = as.Date(character()),stringsAsFactors=FALSE) 
+
+dat<-data
+for(i in 1:ncol(dat))
+    {
+    dat[,i]<-as.factor(dat[,i])
+}
+
+set.seed(2)
+# spliting the data into train and test with percentage of the total rows.
+sample = floor(0.90*nrow(dat)) 
+
+#number of rows in the training data set. 
+#sample  
+# Randomly identifies the rows equal to the size of sample.
+train = sample(seq_len(nrow(dat)),size = sample)  
+
+#creates the training dataset with row numbers stored in train.
+trainori =dat[train,] 
+
+#creates the testing dataset with row numbers thate are not stored in train.
+testori=dat[-train,] 
+#nrow(testori)
+model_fit <- polr(quality~ exercise+dream, data = dat, Hess = TRUE,method="logistic")
+summary_table <- coef(summary(model_fit))
+
+pval <- pnorm(abs(summary_table[, "t value"]),lower.tail = FALSE)* 2
+
+summary_table <- cbind(summary_table, "p value" = round(pval,3))
+summary_table
+
+#removing the least relevent data features to improve the accuracy.
+dftest = subset(testori, select = -c(dependents,medicine,age,eat_habits,noise,stress,hours,wake_up,time_to_fall_asleep,sexual_activity,coffee,feeling))
+
+#prediction with each values probability. and actual response answer from the survey for the testing data
+for(i in  1:nrow(dftest))
+ {
+new_data<-dftest[i,]
+print(round(predict(model_fit,new_data,type = "p"),3))
+results<- round(predict(model_fit,new_data,type = "p"),3)   
+print(paste("Actual Response is:",dftest[i,2]))
+print("---------------------") 
+ }
+results <- data.frame(ticker=character(),value=numeric(),date = as.Date(character()),stringsAsFactors=FALSE) 
+dat<-data
+
+for(i in 1:ncol(dat))
+    {
+    dat[,i]<-as.factor(dat[,i])
+}
+
+# 11 combinations, so 11 models will be ran using the polr function
+model1<- polr(quality ~ exercise+dream+feeling+eat_habits, data = dat, Hess = TRUE,method="logistic")
+print("model1- exercise+dream+feeling+eat_habits")
+print(AIC(model1))
+
+model2<- polr(quality ~ exercise+feeling+eat_habits, data = dat, Hess = TRUE,method="logistic")
+print("model2- exercise+feeling+eat_habits")
+print(AIC(model2))
+
+model3<- polr(quality ~ dream+feeling+eat_habits, data = dat, Hess = TRUE,method="logistic")
+print("model3- dream+feeling+eat_habits")
+print(AIC(model3))
+
+model4<- polr(quality ~ exercise+dream+eat_habits, data = dat, Hess = TRUE,method="logistic")
+print("model4- exercise+dream+eat_habits")
+print(AIC(model4))
+
+model5<- polr(quality ~ eat_habits+feeling, data = dat, Hess = TRUE,method="logistic")
+print("model5- eat_habits+feeling")
+print(AIC(model5))
+
+model6<- polr(quality ~ exercise+eat_habits, data = dat, Hess = TRUE,method="logistic")
+print("model6- exercise+eat_habits")
+print(AIC(model6))
+
+model7<- polr(quality ~ exercise+dream+feeling, data = dat, Hess = TRUE,method="logistic")
+print("model7- exercise+dream+feeling")
+print(AIC(model7))
+
+model8<- polr(quality ~ exercise+feeling, data = dat, Hess = TRUE,method="logistic")
+print("model8- exercise+feeling")
+print(AIC(model8))
+
+model9<- polr(quality ~ dream+feeling, data = dat, Hess = TRUE,method="logistic")
+print("model9- dream+feeling")
+print(AIC(model9))
+
+model10<- polr(quality ~ exercise+dream, data = dat, Hess = TRUE,method="logistic")
+print("model10- exercise+dream")
+print(AIC(model10))
+
+model11<- polr(quality ~ eat_habits+dream, data = dat, Hess = TRUE,method="logistic")
+print("model11- eat_habits+dream")
+print(AIC(model11))
+
+```
+
+# Assumption
+```{r}
+# check the assumption for the best model uisng brant, model 10
+brant(model10)
+```
+
+# Piechart to show the age of the participants
+```{r echo = FALSE}
+AgeTable <- table(final$age)
+label <- paste(names(AgeTable), "\n", AgeTable)
+colors = c("#55DDE0", "#33658A", "#2F4858", "#F6AE2D", "#F26419","bisque", "lightpink2")
+
+pie= pie(AgeTable, labels = label, main = "Age Counts", col = colors,border="white")
+pie = pie + theme_classic() + theme(axis.line = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          plot.title = element_text(hjust = 0.5, color = "#666666"))
+```
